@@ -2,87 +2,65 @@ name: Build and Package
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        arch: [x64, arm64]  # 针对常用架构
-    env:
-      GO_VERSION: '1.21'
+        os: [linux, windows]
+        include:
+          - os: linux
+            goos: linux
+            goarch: amd64
+            ext: ""
+          - os: windows
+            goos: windows
+            goarch: amd64
+            ext: ".exe"
 
     steps:
+      # Step 1. 检出代码
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 设置Go环境
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      # Setup Node.js 环境
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v3
+      # Step 2. 设置 Node.js 环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 编译前端
-      - name: Build Frontend
+      # Step 3. 编译前端
+      - name: Build frontend
         working-directory: ./app
         run: |
           npm install -g pnpm
           pnpm install
           pnpm build
 
-      # 编译后端 - 在项目根目录一级
-      - name: Build Backend
-        working-directory: ..
-        run: |
-          GOOS=${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}
-          GOARCH=${{ matrix.arch }}
-          # 输出文件名，windows 后缀 .exe
-          OUTPUT_NAME="chatnio"
-          if [ "$GOOS" = "windows" ]; then
-            OUTPUT_NAME="chatnio.exe"
-          fi
-          # 设置环境变量并构建
-          env GOOS=$GOOS GOARCH=$GOARCH go build -mod=vendor -v -o $OUTPUT_NAME
-
-      # 将所有文件打包成zip
-      - name: Package Project
-        run: |
-          GOOS=${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}
-          GOARCH=${{ matrix.arch }}
-
-          ZIP_NAME="chatnio-${GOOS}-${GOARCH}.zip"
-
-          if [ "$GOOS" = "windows" ]; then
-            OUTPUT_NAME="chatnio.exe"
-          else
-            OUTPUT_NAME="chatnio"
-          fi
-
-          # 把需要的文件准备到临时目录打包
-
-          mkdir package
-          # 复制前端打包产物
-          cp -r ./app/dist package/
-          # 复制后端编译产物到 package
-          cp ../$OUTPUT_NAME package/
-          # 这里你可根据项目结构复制更多资源或README等
-
-          cd package
-          zip -r ../$ZIP_NAME *
-          cd ..
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      # Step 4. 设置 Go 环境
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          name: chatnio-${{ matrix.os }}-${{ matrix.arch }}
-          path: chatnio-${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}-${{ matrix.arch }}.zip
+          go-version: 1.21
+
+      # Step 5. 编译后端
+      - name: Build backend
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -mod=vendor -v -o chatnio${{ matrix.ext }}
+
+      # Step 6. 打包项目
+      - name: Package project
+        run: |
+          zip -r chatnio_${{ matrix.os }}.zip chatnio${{ matrix.ext }} app
+
+      # Step 7. 上传构建产物
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatnio-${{ matrix.os }}
+          path: chatnio_${{ matrix.os }}.zip
