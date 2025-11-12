@@ -1,18 +1,14 @@
-name: Build and Release
+name: Build and Release (Linux only, clean package)
 
 on:
   push:
     tags:
-      - "v*"     # 例如推送 v1.0.0 会触发构建
-  workflow_dispatch: # 手动触发
+      - "v*"     # 推送 tag 时触发，例如 v1.0.0
+  workflow_dispatch:  # 也可以手动触发
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux, windows]
-        goarch: [amd64]
     env:
       GO_VERSION: "1.21"
       NODE_VERSION: "18"
@@ -33,7 +29,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      # 编译前端
+      # 构建前端
       - name: Build frontend
         working-directory: ./app
         run: |
@@ -41,25 +37,32 @@ jobs:
           pnpm install
           pnpm build
 
-      # 编译后端
-      - name: Build backend
+      # 构建后端
+      - name: Build backend (Linux)
         run: |
-          go env -w GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
+          go env -w GOOS=linux GOARCH=amd64
           go mod vendor
           go build -mod=vendor -v -o chatnio
 
-      # 打包整个项目
-      - name: Create zip package
+      # 打包运行文件（干净版）
+      - name: Create release package
         run: |
-          mkdir dist
-          zip -r dist/chatnio-${{ matrix.goos }}-${{ matrix.goarch }}.zip . -x "*.git*" -x "node_modules/*" -x "app/node_modules/*" -x "dist/*"
+          mkdir -p release/app/dist
+          mkdir -p dist
+          cp -r chatnio release/
+          cp -r app/dist release/app/
+          if [ -f README.md ]; then cp README.md release/; fi
+          if [ -d config ]; then cp -r config release/; fi
+          cd release
+          zip -r ../dist/chatnio-linux-amd64.zip ./*
+          cd ..
 
-      # 上传构建产物（在 Actions 结果中可下载）
+      # 上传构建产物
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chatnio-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/chatnio-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+          name: chatnio-linux-amd64
+          path: dist/chatnio-linux-amd64.zip
 
   release:
     runs-on: ubuntu-latest
