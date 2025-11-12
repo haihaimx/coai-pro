@@ -48,17 +48,21 @@ jobs:
         with:
           go-version: 1.21
 
-      # Step 5. 编译后端
+      # Step 5. 同步 vendor（防止 gopkg.in/yaml.v3 报错）
+      - name: Sync Go vendor
+        run: go mod vendor
+
+      # Step 6. 编译后端
       - name: Build backend
         run: |
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -mod=vendor -v -o chatnio${{ matrix.ext }}
 
-      # Step 6. 打包项目
+      # Step 7. 打包项目（包含前端与后端）
       - name: Package project
         run: |
           zip -r chatnio_${{ matrix.os }}.zip chatnio${{ matrix.ext }} app
 
-      # Step 7. 上传构建产物
+      # Step 8. 上传构建产物
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
