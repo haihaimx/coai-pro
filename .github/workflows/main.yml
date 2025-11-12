@@ -1,125 +1,78 @@
-name: Build and Package
+name: Build and Release
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
-concurrency:
-  group: build-and-package-${{ github.ref }}
-  cancel-in-progress: false  # 把 true 改成 false 可以避免新触发时自动取消旧运行
+    tags:
+      - "v*"     # 例如推送 v1.0.0 会触发构建
+  workflow_dispatch: # 手动触发
 
 jobs:
   build:
-    # 增加超时时间（单位：分钟），根据需要调整
-    timeout-minutes: 120
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        include:
-          - runner: ubuntu-latest
-            os: linux
-            goos: linux
-            goarch: amd64
-            ext: ""
-          - runner: windows-latest
-            os: windows
-            goos: windows
-            goarch: amd64
-            ext: ".exe"
+        goos: [linux, windows]
+        goarch: [amd64]
+    env:
+      GO_VERSION: "1.21"
+      NODE_VERSION: "18"
 
     steps:
-      - name: Checkout code
+      - name: Checkout source
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: true
 
-      - name: Show repo roots (debug)
-        run: |
-          echo "PWD: $(pwd)"
-          echo "List top-level:"
-          ls -la
-          echo "List chat/adapter:"
-          if [ -d chat/adapter ]; then ls -la chat/adapter || true; else echo "no chat/adapter dir"; fi
-        shell: bash
-
-      # Node setup + frontend build (runs on both runners; windows will use bash via actions/checkout)
+      # 安装 Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Build frontend
-        working-directory: ./app
-        run: |
-          set -e
-          npm install -g pnpm
-          pnpm install
-          pnpm build
-        shell: bash
-
+      # 安装 Go
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.21
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Show go env (debug)
+      # 编译前端
+      - name: Build frontend
+        working-directory: ./app
         run: |
-          go version
-          go env
-        shell: bash
+          npm install -g pnpm
+          pnpm install
+          pnpm build
 
-      # 确保在模块根目录运行 go mod vendor（有助于解决你之前的错误）
-      - name: Sync Go vendor
-        run: |
-          set -e
-          # 打印 go.mod 以确认路径
-          echo "=== go.mod content ==="
-          cat go.mod || true
-          go mod tidy
-          go mod vendor
-          echo "=== vendor summary ==="
-          du -sh vendor || true
-          ls -la vendor | sed -n '1,200p' || true
-        shell: bash
-
+      # 编译后端
       - name: Build backend
         run: |
-          set -e
-          echo "Building GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -mod=vendor -v -o chatnio${{ matrix.ext }}
-        shell: bash
+          go env -w GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
+          go mod vendor
+          go build -mod=vendor -v -o chatnio
 
-      - name: List build outputs (debug)
+      # 打包整个项目
+      - name: Create zip package
         run: |
-          ls -la
-          file chatnio${{ matrix.ext }} || true
-        shell: bash
+          mkdir dist
+          zip -r dist/chatnio-${{ matrix.goos }}-${{ matrix.goarch }}.zip . -x "*.git*" -x "node_modules/*" -x "app/node_modules/*" -x "dist/*"
 
-      - name: Package project (Linux)
-        if: matrix.os == 'linux'
-        run: |
-          set -e
-          zip -r chatnio_linux.zip chatnio${{ matrix.ext }} app
-          ls -la chatnio_linux.zip
-        shell: bash
-
-      - name: Package project (Windows)
-        if: matrix.os == 'windows'
-        run: |
-          pwsh -NoProfile -Command "
-            if(Test-Path -Path './chatnio${{ matrix.ext }}') {
-              Compress-Archive -Path './chatnio${{ matrix.ext }}','app/*' -DestinationPath 'chatnio_windows.zip' -Force
-              Get-ChildItem -LiteralPath 'chatnio_windows.zip' | Format-List
-            } else {
-              Write-Error 'backend binary not found'
-            }
-          "
+      # 上传构建产物（在 Actions 结果中可下载）
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chatnio-${{ matrix.os }}
-          path: ${{ matrix.os == 'linux' && 'chatnio_linux.zip' || 'chatnio_windows.zip' }}
+          name: chatnio-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/chatnio-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
