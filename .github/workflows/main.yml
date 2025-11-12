@@ -7,64 +7,119 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: build-and-package-${{ github.ref }}
+  cancel-in-progress: false  # 把 true 改成 false 可以避免新触发时自动取消旧运行
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # 增加超时时间（单位：分钟），根据需要调整
+    timeout-minutes: 120
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        os: [linux, windows]
         include:
-          - os: linux
+          - runner: ubuntu-latest
+            os: linux
             goos: linux
             goarch: amd64
             ext: ""
-          - os: windows
+          - runner: windows-latest
+            os: windows
             goos: windows
             goarch: amd64
             ext: ".exe"
 
     steps:
-      # Step 1. 检出代码
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
 
-      # Step 2. 设置 Node.js 环境
+      - name: Show repo roots (debug)
+        run: |
+          echo "PWD: $(pwd)"
+          echo "List top-level:"
+          ls -la
+          echo "List chat/adapter:"
+          if [ -d chat/adapter ]; then ls -la chat/adapter || true; else echo "no chat/adapter dir"; fi
+        shell: bash
+
+      # Node setup + frontend build (runs on both runners; windows will use bash via actions/checkout)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # Step 3. 编译前端
       - name: Build frontend
         working-directory: ./app
         run: |
+          set -e
           npm install -g pnpm
           pnpm install
           pnpm build
+        shell: bash
 
-      # Step 4. 设置 Go 环境
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: 1.21
 
-      # Step 5. 同步 vendor（防止 gopkg.in/yaml.v3 报错）
-      - name: Sync Go vendor
-        run: go mod vendor
+      - name: Show go env (debug)
+        run: |
+          go version
+          go env
+        shell: bash
 
-      # Step 6. 编译后端
+      # 确保在模块根目录运行 go mod vendor（有助于解决你之前的错误）
+      - name: Sync Go vendor
+        run: |
+          set -e
+          # 打印 go.mod 以确认路径
+          echo "=== go.mod content ==="
+          cat go.mod || true
+          go mod tidy
+          go mod vendor
+          echo "=== vendor summary ==="
+          du -sh vendor || true
+          ls -la vendor | sed -n '1,200p' || true
+        shell: bash
+
       - name: Build backend
         run: |
+          set -e
+          echo "Building GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}"
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -mod=vendor -v -o chatnio${{ matrix.ext }}
+        shell: bash
 
-      # Step 7. 打包项目（包含前端与后端）
-      - name: Package project
+      - name: List build outputs (debug)
         run: |
-          zip -r chatnio_${{ matrix.os }}.zip chatnio${{ matrix.ext }} app
+          ls -la
+          file chatnio${{ matrix.ext }} || true
+        shell: bash
 
-      # Step 8. 上传构建产物
-      - name: Upload artifacts
+      - name: Package project (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          set -e
+          zip -r chatnio_linux.zip chatnio${{ matrix.ext }} app
+          ls -la chatnio_linux.zip
+        shell: bash
+
+      - name: Package project (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          pwsh -NoProfile -Command "
+            if(Test-Path -Path './chatnio${{ matrix.ext }}') {
+              Compress-Archive -Path './chatnio${{ matrix.ext }}','app/*' -DestinationPath 'chatnio_windows.zip' -Force
+              Get-ChildItem -LiteralPath 'chatnio_windows.zip' | Format-List
+            } else {
+              Write-Error 'backend binary not found'
+            }
+          "
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: chatnio-${{ matrix.os }}
-          path: chatnio_${{ matrix.os }}.zip
+          path: ${{ matrix.os == 'linux' && 'chatnio_linux.zip' || 'chatnio_windows.zip' }}
