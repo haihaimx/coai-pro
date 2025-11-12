@@ -1,157 +1,88 @@
-name: Multi-Platform Build
+name: Build and Package
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
   pull_request:
-    branches: [ main, master ]
-  release:
-    types: [ published ]
-  workflow_dispatch:
-
-env:
-  GO_VERSION: '1.21'
-  NODE_VERSION: '18'
 
 jobs:
-  build-frontend:
-    name: Build Frontend
+  build:
     runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'pnpm'
-        cache-dependency-path: 'app/pnpm-lock.yaml'
-
-    - name: Install pnpm
-      run: |
-        # 清除可能的缓存问题
-        npm cache clean --force
-        # 安装 pnpm
-        npm install -g pnpm
-        # 验证安装
-        pnpm --version
-        # 确保 pnpm 在 PATH 中
-        echo "PNPM path: $(which pnpm)"
-
-    - name: Build Frontend
-      working-directory: ./app
-      run: |
-        pnpm install
-        pnpm run build
-
-    - name: Upload frontend artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: frontend-dist
-        path: app/dist/
-        retention-days: 1
-
-  build-backend:
-    name: Build Backend (${{ matrix.os }}-${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    needs: build-frontend
-    
     strategy:
       matrix:
-        include:
-          # Linux builds
-          - os: ubuntu-latest
-            arch: amd64
-            goos: linux
-            goarch: amd64
-            output: chatnio-linux-amd64
-          - os: ubuntu-latest
-            arch: arm64
-            goos: linux
-            goarch: arm64
-            output: chatnio-linux-arm64
-          - os: ubuntu-latest
-            arch: 386
-            goos: linux
-            goarch: 386
-            output: chatnio-linux-386
-          # Windows builds
-          - os: windows-latest
-            arch: amd64
-            goos: windows
-            goarch: amd64
-            output: chatnio-windows-amd64.exe
-          - os: windows-latest
-            arch: 386
-            goos: windows
-            goarch: 386
-            output: chatnio-windows-386.exe
+        os: [ubuntu-latest, windows-latest]
+        arch: [x64, arm64]  # 针对常用架构
+    env:
+      GO_VERSION: '1.21'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
+      # 设置Go环境
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Download frontend artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: frontend-dist
-        path: app/dist
+      # Setup Node.js 环境
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-    - name: Build Backend
-      run: |
-        go build -mod=vendor -v -ldflags="-s -w" -o ${{ matrix.output }}
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
+      # 编译前端
+      - name: Build Frontend
+        working-directory: ./app
+        run: |
+          npm install -g pnpm
+          pnpm install
+          pnpm build
 
-    - name: Prepare package contents
-      run: |
-        mkdir -p package
-        
-        # 复制二进制文件
-        cp ${{ matrix.output }} package/chatnio${{ matrix.goos == 'windows' && '.exe' || '' }}
-        
-        # 复制前端文件
-        cp -r app/dist package/frontend/
-        
-        # 复制配置文件和其他必要文件
-        [ -f config.example.yaml ] && cp config.example.yaml package/ 2>/dev/null || true
-        [ -f README.md ] && cp README.md package/ 2>/dev/null || true
-        [ -f LICENSE ] && cp LICENSE package/ 2>/dev/null || true
-        
-        # 为 Windows 创建批处理文件
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          echo '@echo off' > package/start.bat
-          echo 'chatnio.exe' >> package/start.bat
-        else
-          echo '#!/bin/bash' > package/start.sh
-          echo './chatnio' >> package/start.sh
-          chmod +x package/start.sh
-        fi
+      # 编译后端 - 在项目根目录一级
+      - name: Build Backend
+        working-directory: ..
+        run: |
+          GOOS=${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}
+          GOARCH=${{ matrix.arch }}
+          # 输出文件名，windows 后缀 .exe
+          OUTPUT_NAME="chatnio"
+          if [ "$GOOS" = "windows" ]; then
+            OUTPUT_NAME="chatnio.exe"
+          fi
+          # 设置环境变量并构建
+          env GOOS=$GOOS GOARCH=$GOARCH go build -mod=vendor -v -o $OUTPUT_NAME
 
-    - name: Create compressed package
-      run: |
-        cd package
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          zip -r ../${{ matrix.output }}.zip .
-        else
-          tar -czf ../${{ matrix.output }}.tar.gz .
-          zip -r ../${{ matrix.output }}.zip .
-        fi
-        cd ..
+      # 将所有文件打包成zip
+      - name: Package Project
+        run: |
+          GOOS=${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}
+          GOARCH=${{ matrix.arch }}
 
-    - name: Upload platform artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.output }}
-        path: |
-          ${{ matrix.output }}.zip
-          ${{ matrix.output }}${{ matrix.goos != 'windows' && '.tar.gz' || '' }}
-        retention-days: 30
+          ZIP_NAME="chatnio-${GOOS}-${GOARCH}.zip"
+
+          if [ "$GOOS" = "windows" ]; then
+            OUTPUT_NAME="chatnio.exe"
+          else
+            OUTPUT_NAME="chatnio"
+          fi
+
+          # 把需要的文件准备到临时目录打包
+
+          mkdir package
+          # 复制前端打包产物
+          cp -r ./app/dist package/
+          # 复制后端编译产物到 package
+          cp ../$OUTPUT_NAME package/
+          # 这里你可根据项目结构复制更多资源或README等
+
+          cd package
+          zip -r ../$ZIP_NAME *
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: chatnio-${{ matrix.os }}-${{ matrix.arch }}
+          path: chatnio-${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}-${{ matrix.arch }}.zip
