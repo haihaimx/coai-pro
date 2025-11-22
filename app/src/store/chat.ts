@@ -31,7 +31,7 @@ import { CustomMask, Mask } from "@/masks/types.ts";
 import { listMasks } from "@/api/mask.ts";
 import { useDispatch, useSelector } from "react-redux";
 import { useMemo } from "react";
-import { ConnectionStack, StreamMessage } from "@/api/connection.ts";
+import { ChatProps, ConnectionStack, StreamMessage } from "@/api/connection.ts";
 import { useTranslation } from "react-i18next";
 import {
   contextSelector,
@@ -62,6 +62,7 @@ type initialStateType = {
   conversations: Record<number, ConversationSerialized>;
   model: string;
   web: boolean;
+  think: boolean;
   current: number;
   model_list: string[];
   market: boolean;
@@ -109,6 +110,7 @@ const chatSlice = createSlice({
       [-1]: { ...defaultConversation },
     },
     web: getBooleanMemory("web", false),
+    think: getBooleanMemory("think", true),
     current: -1,
     model: getModel(offline, getMemory("model")),
     model_list: getModelList(
@@ -283,6 +285,15 @@ const chatSlice = createSlice({
       setMemory("web", web ? "true" : "false");
       state.web = web;
     },
+    setThink: (state, action) => {
+      setMemory("think", action.payload ? "true" : "false");
+      state.think = action.payload as boolean;
+    },
+    toggleThink: (state) => {
+      const think = !state.think;
+      setMemory("think", think ? "true" : "false");
+      state.think = think;
+    },
     setCurrent: (state, action) => {
       const current = action.payload as number;
       state.current = current;
@@ -355,7 +366,9 @@ export const {
   setCurrent,
   setModel,
   setWeb,
+  setThink,
   toggleWeb,
+  toggleThink,
   setModelList,
   addModelList,
   removeModelList,
@@ -383,6 +396,7 @@ export const selectConversations = (
 ): Record<number, ConversationSerialized> => state.chat.conversations;
 export const selectModel = (state: RootState): string => state.chat.model;
 export const selectWeb = (state: RootState): boolean => state.chat.web;
+export const selectThink = (state: RootState): boolean => state.chat.think;
 export const selectCurrent = (state: RootState): number => state.chat.current;
 export const selectModelList = (state: RootState): string[] =>
   state.chat.model_list;
@@ -468,6 +482,27 @@ export function useConversationActions() {
   };
 }
 
+export function useThinkingSettings() {
+  const think = useSelector(selectThink);
+  const model = useSelector(selectModel);
+  const supportModels = useSelector(selectSupportModels);
+
+  return useMemo(() => {
+    const currentModel = supportModels.find((item) => item.id === model);
+    const supportsThinking = !!currentModel?.thinking_model;
+    const allowUserControl =
+      supportsThinking && !!currentModel?.allow_user_think;
+    const active = supportsThinking ? (allowUserControl ? think : true) : false;
+
+    return {
+      supportsThinking,
+      allowUserControl,
+      active,
+      preference: think,
+    };
+  }, [supportModels, model, think]);
+}
+
 export function useMessageActions() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -487,6 +522,8 @@ export function useMessageActions() {
   const presence_penalty = useSelector(presencePenaltySelector);
   const frequency_penalty = useSelector(frequencyPenaltySelector);
   const repetition_penalty = useSelector(repetitionPenaltySelector);
+  const { supportsThinking, active: thinkActive } = useThinkingSettings();
+  const thinkPayload = supportsThinking ? thinkActive : undefined;
 
   return {
     send: async (message: string, using_model?: string) => {
@@ -504,7 +541,7 @@ export function useMessageActions() {
         }
       }
 
-      const state = stack.send(current, t, {
+      const payload: ChatProps = {
         type: "chat",
         message,
         web,
@@ -518,7 +555,12 @@ export function useMessageActions() {
         presence_penalty,
         frequency_penalty,
         repetition_penalty,
-      });
+      };
+      if (thinkPayload !== undefined) {
+        payload.think = thinkPayload;
+      }
+
+      const state = stack.send(current, t, payload);
       if (!state) return false;
 
       dispatch(
@@ -537,7 +579,7 @@ export function useMessageActions() {
       if (!stack.hasConnection(current)) {
         stack.createConnection(current);
       }
-      stack.sendRestartEvent(current, t, {
+      const restartPayload: ChatProps = {
         web,
         model,
         context: history,
@@ -550,7 +592,11 @@ export function useMessageActions() {
         frequency_penalty,
         repetition_penalty,
         message: "",
-      });
+      };
+      if (thinkPayload !== undefined) {
+        restartPayload.think = thinkPayload;
+      }
+      stack.sendRestartEvent(current, t, restartPayload);
 
       // remove the last message if it's from assistant and create a new message
       dispatch(restartMessage(current));

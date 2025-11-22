@@ -116,6 +116,7 @@ function reducer(state: MarketForm, action: any): MarketForm {
           default: false,
           tag: [],
           avatar: "",
+          allow_user_think: false,
           seed: generateSeed(),
         },
       ];
@@ -131,6 +132,7 @@ function reducer(state: MarketForm, action: any): MarketForm {
           default: true,
           tag: [],
           avatar: "",
+          allow_user_think: false,
           seed: generateSeed(),
         },
         ...state,
@@ -147,6 +149,7 @@ function reducer(state: MarketForm, action: any): MarketForm {
           default: true,
           tag: [],
           avatar: "",
+          allow_user_think: false,
           seed: generateSeed(),
         })),
         ...state,
@@ -225,6 +228,15 @@ function reducer(state: MarketForm, action: any): MarketForm {
         ...state.map((model, idx) => {
           if (idx === action.payload.idx) {
             return { ...model, thinking_model: action.payload.default };
+          }
+          return model;
+        }),
+      ];
+    case "update-thinking-control":
+      return [
+        ...state.map((model, idx) => {
+          if (idx === action.payload.idx) {
+            return { ...model, allow_user_think: action.payload.default };
           }
           return model;
         }),
@@ -310,6 +322,7 @@ function reducer(state: MarketForm, action: any): MarketForm {
           default: false,
           tag: [],
           avatar: "",
+          allow_user_think: false,
           seed: generateSeed(),
         },
         ...state.slice(action.payload.idx + 1),
@@ -689,6 +702,28 @@ function MarketItem({
               onCheckedChange={(state) => {
                 dispatch({
                   type: "update-thinking-model",
+                  payload: {
+                    idx: index,
+                    default: state,
+                  },
+                });
+              }}
+            />
+          </div>
+          <div className={`market-row`}>
+            <span>
+              {t("admin.market.allow-thinking-control")}
+              <Tips content={t("admin.market.allow-thinking-control-tip")} />
+            </span>
+            <Switch
+              className={`ml-auto`}
+              disabled={!model.thinking_model}
+              checked={
+                model.thinking_model ? model.allow_user_think || false : false
+              }
+              onCheckedChange={(state) => {
+                dispatch({
+                  type: "update-thinking-control",
                   payload: {
                     idx: index,
                     default: state,

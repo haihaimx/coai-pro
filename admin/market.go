@@ -19,6 +19,7 @@ type MarketModel struct {
 	FunctionCalling bool     `json:"function_calling" mapstructure:"functioncalling"`
 	VisionModel     bool     `json:"vision_model" mapstructure:"visionmodel"`
 	ThinkingModel   bool     `json:"thinking_model" mapstructure:"thinkingmodel"`
+	AllowUserThink  bool     `json:"allow_user_think" mapstructure:"allowuserthink"`
 	OCRModel        bool     `json:"ocr_model" mapstructure:"ocrmodel"`
 	ReverseModel    bool     `json:"reverse_model" mapstructure:"reversemodel"`
 	Avatar          string   `json:"avatar" mapstructure:"avatar"`
@@ -65,6 +66,21 @@ func (m *Market) VisionModelIDs() []string {
 	return result
 }
 
+func (m *Market) ThinkingConfigs() map[string]globals.ThinkingConfig {
+	result := make(map[string]globals.ThinkingConfig)
+	for _, model := range m.Models {
+		if !model.ThinkingModel || len(model.Id) == 0 {
+			continue
+		}
+
+		result[model.Id] = globals.ThinkingConfig{
+			Enabled:          true,
+			AllowUserControl: model.AllowUserThink,
+		}
+	}
+	return result
+}
+
 func (m *Market) SaveConfig() error {
 	viper.Set("market", m.Models)
 	return viper.WriteConfig()
@@ -77,5 +93,6 @@ func (m *Market) SetModels(models MarketModelList) error {
 	}
 
 	globals.SetVisionModels(m.VisionModelIDs())
+	globals.SetThinkingConfigs(m.ThinkingConfigs())
 	return nil
 }

@@ -68,6 +68,7 @@ func ChatRelayAPI(c *gin.Context) {
 	created := time.Now().Unix()
 
 	messages := transform(form.Messages)
+	messages, directive := utils.ExtractThinkingDirectiveFromMessages(messages)
 	if strings.HasPrefix(form.Model, "web-") {
 		suffix := strings.TrimPrefix(form.Model, "web-")
 
@@ -80,6 +81,13 @@ func ChatRelayAPI(c *gin.Context) {
 		form.Official = true
 	}
 
+	preference := form.Think
+	if directive != nil {
+		preference = directive
+	}
+	thinkState := globals.ResolveThinkingPreference(form.Model, preference)
+	messages = utils.ApplyThinkingDirective(messages, thinkState)
+
 	check, plan, usageDetail := checkEnableState(db, cache, user, form.Model, messages)
 	if check != nil {
 		sendErrorResponse(c, check, "quota_exceeded_error")
@@ -87,13 +95,13 @@ func ChatRelayAPI(c *gin.Context) {
 	}
 
 	if form.Stream {
-		sendStreamTranshipmentResponse(c, form, messages, id, created, user, plan, usageDetail)
+		sendStreamTranshipmentResponse(c, form, messages, id, created, user, plan, usageDetail, thinkState)
 	} else {
-		sendTranshipmentResponse(c, form, messages, id, created, user, plan, usageDetail)
+		sendTranshipmentResponse(c, form, messages, id, created, user, plan, usageDetail, thinkState)
 	}
 }
 
-func getChatProps(form RelayForm, messages []globals.Message, buffer *utils.Buffer) *adaptercommon.ChatProps {
+func getChatProps(form RelayForm, messages []globals.Message, buffer *utils.Buffer, think *bool) *adaptercommon.ChatProps {
 	return adaptercommon.CreateChatProps(&adaptercommon.ChatProps{
 		Model:             form.Model,
 		Message:           messages,
@@ -106,15 +114,17 @@ func getChatProps(form RelayForm, messages []globals.Message, buffer *utils.Buff
 		TopK:              form.TopK,
 		Tools:             form.Tools,
 		ToolChoice:        form.ToolChoice,
+		Think:             think,
+		ExtraBody:         form.ExtraBody,
 	}, buffer)
 }
 
-func sendTranshipmentResponse(c *gin.Context, form RelayForm, messages []globals.Message, id string, created int64, user *auth.User, plan bool, detail *auth.SubscriptionUsageDetail) {
+func sendTranshipmentResponse(c *gin.Context, form RelayForm, messages []globals.Message, id string, created int64, user *auth.User, plan bool, detail *auth.SubscriptionUsageDetail, think *bool) {
 	db := utils.GetDBFromContext(c)
 	cache := utils.GetCacheFromContext(c)
 
 	buffer := utils.NewBuffer(form.Model, messages, channel.ChargeInstance.GetCharge(form.Model))
-	hit, err := channel.NewChatRequestWithCache(cache, buffer, auth.GetGroup(db, user), getChatProps(form, messages, buffer), func(data *globals.Chunk) error {
+	hit, err := channel.NewChatRequestWithCache(cache, buffer, auth.GetGroup(db, user), getChatProps(form, messages, buffer, think), func(data *globals.Chunk) error {
 		buffer.WriteChunk(data)
 		return nil
 	})
@@ -212,7 +222,7 @@ func getStreamTranshipmentForm(id string, created int64, form RelayForm, data *g
 	}
 }
 
-func sendStreamTranshipmentResponse(c *gin.Context, form RelayForm, messages []globals.Message, id string, created int64, user *auth.User, plan bool, detail *auth.SubscriptionUsageDetail) {
+func sendStreamTranshipmentResponse(c *gin.Context, form RelayForm, messages []globals.Message, id string, created int64, user *auth.User, plan bool, detail *auth.SubscriptionUsageDetail, think *bool) {
 	partial := make(chan RelayStreamResponse)
 	db := utils.GetDBFromContext(c)
 	cache := utils.GetCacheFromContext(c)
@@ -223,7 +233,7 @@ func sendStreamTranshipmentResponse(c *gin.Context, form RelayForm, messages []g
 	go func() {
 		buffer := utils.NewBuffer(form.Model, messages, charge)
 		hit, err := channel.NewChatRequestWithCache(
-			cache, buffer, group, getChatProps(form, messages, buffer),
+			cache, buffer, group, getChatProps(form, messages, buffer, think),
 			func(data *globals.Chunk) error {
 				buffer.WriteChunk(data)
 

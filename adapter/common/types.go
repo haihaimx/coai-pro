@@ -29,6 +29,8 @@ type ChatProps struct {
 	Tools             *globals.FunctionTools `json:"tools,omitempty"`
 	ToolChoice        *interface{}           `json:"tool_choice,omitempty"`
 	Buffer            *utils.Buffer          `json:"-"`
+	Think             *bool                  `json:"-"`
+	ExtraBody         map[string]interface{} `json:"-"`
 }
 
 func (c *ChatProps) SetupBuffer(buf *utils.Buffer) {

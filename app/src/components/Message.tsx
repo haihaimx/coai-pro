@@ -33,6 +33,7 @@ import EditorProvider from "@/components/EditorProvider.tsx";
 import Avatar from "@/components/Avatar.tsx";
 import { useSelector } from "react-redux";
 import { selectUsername } from "@/store/auth.ts";
+import { useThinkingSettings } from "@/store/chat.ts";
 import { appLogo } from "@/conf/env.ts";
 import { motion } from "framer-motion";
 import { ThinkContent } from "@/components/ThinkContent";
@@ -255,6 +256,7 @@ function MessageContent({
   const isAssistant = message.role === "assistant";
   const isOutput = message.end === false;
   const user = useSelector(selectUsername);
+  const { active: showThinking } = useThinkingSettings();
 
   const [open, setOpen] = useState(false);
   const [editedMessage, setEditedMessage] = useState<string | undefined>("");
@@ -334,14 +336,16 @@ function MessageContent({
           <>
             {parsedContent ? (
               <>
-                <ThinkContent 
-                  content={parsedContent.thinkContent} 
-                  isComplete={parsedContent.isComplete}
-                />
+                {showThinking && (
+                  <ThinkContent
+                    content={parsedContent.thinkContent}
+                    isComplete={parsedContent.isComplete}
+                  />
+                )}
                 {parsedContent.restContent && (
                   <Markdown
                     loading={message.end === false}
-                    children={message.content}
+                    children={parsedContent.restContent}
                     acceptHtml={false}
                   />
                 )}

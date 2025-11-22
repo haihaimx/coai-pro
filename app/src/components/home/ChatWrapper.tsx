@@ -10,6 +10,7 @@ import {
   selectSupportModels,
   useMessageActions,
   useMessages,
+  useThinkingSettings,
   useWorking,
 } from "@/store/chat.ts";
 import { formatMessage } from "@/utils/processor.ts";
@@ -20,6 +21,7 @@ import { alignSelector } from "@/store/settings.ts";
 import { FileArray } from "@/api/file.ts";
 import {
   NewConversationAction,
+  ThinkingAction,
   WebAction,
 } from "@/components/home/assemblies/ChatAction.tsx";
 import ChatSpace from "@/components/home/ChatSpace.tsx";
@@ -75,6 +77,7 @@ function ChatWrapper() {
 
   const working = useWorking();
   const supportModels = useSelector(selectSupportModels);
+  const { supportsThinking } = useThinkingSettings();
 
   const requireAuth = useMemo(
     (): boolean => !!getModelFromId(supportModels, model)?.auth,
@@ -184,6 +187,16 @@ function ChatWrapper() {
               >
                 <WebAction />
               </motion.div>
+              {supportsThinking && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.3, delay: 0.15 }}
+                >
+                  <ThinkingAction />
+                </motion.div>
+              )}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}

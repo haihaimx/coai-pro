@@ -310,8 +310,10 @@ function SidebarConversationList({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("conversation.cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              {t("conversation.delete")}
+            <AlertDialogAction asChild>
+              <Button variant={`destructive`} loading onClick={handleDelete}>
+                {t("conversation.delete")}
+              </Button>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -36,15 +36,26 @@ func (c *ChatInstance) GetLatestPrompt(props *adaptercommon.ChatProps) string {
 func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) interface{} {
 	if props.Model == globals.GPT3TurboInstruct {
 		// for completions
-		return CompletionRequest{
+		return mergeExtraBody(CompletionRequest{
 			Model:    props.Model,
 			Prompt:   c.GetCompletionPrompt(props.Message),
 			MaxToken: props.MaxTokens,
 			Stream:   stream,
-		}
+		}, props.ExtraBody)
 	}
 
 	messages := formatMessages(props)
+
+	extraBody := props.ExtraBody
+	shouldApplyReasoning := props.Think != nil && *props.Think
+	if shouldApplyReasoning {
+		if extraBody == nil {
+			extraBody = map[string]interface{}{}
+		}
+		if _, exists := extraBody["reasoning_effort"]; !exists {
+			extraBody["reasoning_effort"] = "medium"
+		}
+	}
 
 	// o1, o3, gpt-5 compatibility
 	isNewModel := len(props.Model) >= 2 && (props.Model[:2] == "o1" || props.Model[:2] == "o3") || strings.HasPrefix(props.Model, "gpt-5")
@@ -74,7 +85,25 @@ func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) 
 	} else {
 		request.MaxToken = props.MaxTokens
 	}
-	return request
+	return mergeExtraBody(request, extraBody)
+}
+
+func mergeExtraBody(body interface{}, extra map[string]interface{}) interface{} {
+	if len(extra) == 0 {
+		return body
+	}
+
+	raw := utils.Marshal(body)
+	data, err := utils.UnmarshalString[map[string]interface{}](raw)
+	if err != nil {
+		return body
+	}
+
+	for key, value := range extra {
+		data[key] = value
+	}
+
+	return data
 }
 
 // CreateChatRequest is the native http request body for openai
