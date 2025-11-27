@@ -24,6 +24,7 @@ import {
   Snail,
   Sparkles,
   Zap,
+  Loader2,
 } from "lucide-react";
 import { includingModelFromPlan } from "@/conf/subscription.tsx";
 import { levelSelector } from "@/store/subscription.ts";
@@ -35,10 +36,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
+import { Label } from "@/components/ui/label.tsx";
+import type { Model } from "@/api/types.tsx";
+import { toast } from "sonner";
 
 const DRAWING_TAG = "image-generation";
 const PLAN_INCLUDED_TAG = "plan-included";
 const HIDDEN_TAGS = ["official", "fast", "unstable", "free"];
+const FIRST_CLASS_MODELS = new Set(["grok-3-image"]);
+const RATIO_OPTIONS = [
+  { label: "1:1", value: "1:1" },
+  { label: "16:9", value: "16:9" },
+  { label: "9:16", value: "9:16" },
+] as const;
+const QUANTITY_OPTIONS = ["2"];
+
+export type DrawingSubmitPayload = {
+  modelId: string;
+  ratio: (typeof RATIO_OPTIONS)[number]["value"];
+  quantity: number;
+  prompt: string;
+};
+
+type DrawingSidebarProps = {
+  onSubmit?: (payload: DrawingSubmitPayload) => void;
+  submitting?: boolean;
+  onModelChange?: (modelId: string, model: Model | null) => void;
+};
 
 const TAG_ICON_MAP: Record<string, ReactNode> = {
   official: <Award />,
@@ -70,7 +95,11 @@ const TAG_STYLE_MAP: Record<string, string> = {
   [PLAN_INCLUDED_TAG]: "text-amber-600 bg-amber-500/20",
 };
 
-export default function DrawingSidebar() {
+export default function DrawingSidebar({
+  onSubmit,
+  submitting,
+  onModelChange,
+}: DrawingSidebarProps) {
   const { t } = useTranslation();
   const open = useSelector(selectMenu);
   const supportModels = useSelector(selectSupportModels);
@@ -87,6 +116,11 @@ export default function DrawingSidebar() {
   const [selectedId, setSelectedId] = useState<string>(
     drawingModels[0]?.id ?? "",
   );
+  const [ratio, setRatio] = useState<(typeof RATIO_OPTIONS)[number]["value"]>(
+    RATIO_OPTIONS[0].value,
+  );
+  const [quantity, setQuantity] = useState<string>(QUANTITY_OPTIONS[0]);
+  const [prompt, setPrompt] = useState<string>("");
 
   useEffect(() => {
     if (drawingModels.length === 0) {
@@ -101,6 +135,7 @@ export default function DrawingSidebar() {
 
   const selectedModel =
     drawingModels.find((model) => model.id === selectedId) ?? null;
+  const isSupportedModel = FIRST_CLASS_MODELS.has(selectedModel?.id ?? "");
 
   const isPlanIncluded = useMemo(
     () => (modelId: string) =>
@@ -109,6 +144,32 @@ export default function DrawingSidebar() {
         : false,
     [subscriptionData, level],
   );
+
+  useEffect(() => {
+    setRatio(RATIO_OPTIONS[0].value);
+    setQuantity(QUANTITY_OPTIONS[0]);
+    setPrompt("");
+  }, [selectedId]);
+
+  useEffect(() => {
+    onModelChange?.(selectedModel?.id ?? "", selectedModel);
+  }, [selectedModel, onModelChange]);
+
+  const handleSubmit = () => {
+    if (!selectedModel || !isSupportedModel) return;
+    const cleanPrompt = prompt.trim();
+    if (!cleanPrompt) {
+      toast.info(t("drawing.promptRequired"));
+      return;
+    }
+
+    onSubmit?.({
+      modelId: selectedModel.id,
+      ratio,
+      quantity: parseInt(quantity, 10),
+      prompt: cleanPrompt,
+    });
+  };
 
   const getTagIcons = (modelId: string, tags: string[] = []) => {
     const mergedTags = [...(tags ?? [])];
@@ -214,6 +275,99 @@ export default function DrawingSidebar() {
           <p className="drawing-empty-desc">{t("drawing.modelEmptyDesc")}</p>
         </div>
       )}
+
+      {selectedModel &&
+        (isSupportedModel ? (
+          <div className="drawing-config-card">
+            <div className="drawing-form-section">
+              <Label htmlFor="drawing-ratio">{t("drawing.ratioLabel")}</Label>
+              <Select
+                value={ratio}
+                onValueChange={(value) =>
+                  setRatio(
+                    value as (typeof RATIO_OPTIONS)[number]["value"],
+                  )
+                }
+                disabled={submitting}
+              >
+                <SelectTrigger
+                  id="drawing-ratio"
+                  className="drawing-ratio-select"
+                >
+                  <SelectValue placeholder={t("drawing.ratioLabel")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {RATIO_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {t(`drawing.ratio${option.value.replace(":", "")}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="drawing-form-section">
+              <Label htmlFor="drawing-quantity">
+                {t("drawing.quantityLabel")}
+              </Label>
+              <Select
+                value={quantity}
+                onValueChange={setQuantity}
+                disabled={submitting}
+              >
+                <SelectTrigger
+                  id="drawing-quantity"
+                  className="drawing-quantity-select"
+                >
+                  <SelectValue placeholder={t("drawing.quantityLabel")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUANTITY_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t("drawing.quantityTwo", { count: Number(option) })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="drawing-form-section">
+              <Label htmlFor="drawing-prompt">
+                {t("drawing.promptLabel")}
+              </Label>
+              <Textarea
+                id="drawing-prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder={t("drawing.promptPlaceholder")}
+                disabled={submitting}
+              />
+            </div>
+
+            <Button
+              type="button"
+              className="drawing-submit-button"
+              onClick={handleSubmit}
+              disabled={!prompt.trim().length || submitting}
+            >
+              {submitting && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              <span>
+                {submitting
+                  ? t("drawing.generatingButton")
+                  : t("drawing.generateButton")}
+              </span>
+            </Button>
+          </div>
+        ) : (
+          <div className="drawing-preview-card">
+            <p className="drawing-preview-title">
+              {t("drawing.previewTitle", { name: selectedModel.name })}
+            </p>
+            <p className="drawing-preview-desc">{t("drawing.previewDesc")}</p>
+          </div>
+        ))}
     </motion.div>
   );
 }

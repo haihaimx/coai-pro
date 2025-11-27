@@ -31,9 +31,16 @@ import {
 import { cn } from "@/components/ui/lib/utils.ts";
 import EditorProvider from "@/components/EditorProvider.tsx";
 import Avatar from "@/components/Avatar.tsx";
+import ModelAvatar, {
+  hasModelAvatar,
+} from "@/components/ModelAvatar.tsx";
 import { useSelector } from "react-redux";
 import { selectUsername } from "@/store/auth.ts";
-import { useThinkingSettings } from "@/store/chat.ts";
+import {
+  selectModel,
+  selectSupportModels,
+  useThinkingSettings,
+} from "@/store/chat.ts";
 import { appLogo } from "@/conf/env.ts";
 import { motion } from "framer-motion";
 import { ThinkContent } from "@/components/ThinkContent";
@@ -257,6 +264,22 @@ function MessageContent({
   const isOutput = message.end === false;
   const user = useSelector(selectUsername);
   const { active: showThinking } = useThinkingSettings();
+  const activeModelId = useSelector(selectModel);
+  const supportModels = useSelector(selectSupportModels);
+  const activeModel = React.useMemo(
+    () => supportModels.find((item) => item.id === activeModelId),
+    [supportModels, activeModelId],
+  );
+  const modelForAvatar = React.useMemo(() => {
+    if (activeModel) return activeModel;
+    if (!activeModelId) return undefined;
+    return {
+      id: activeModelId,
+      name: activeModelId,
+      avatar: "",
+    };
+  }, [activeModel, activeModelId]);
+  const showModelAvatar = modelForAvatar ? hasModelAvatar(modelForAvatar) : false;
 
   const [open, setOpen] = useState(false);
   const [editedMessage, setEditedMessage] = useState<string | undefined>("");
@@ -304,11 +327,19 @@ function MessageContent({
               username={username ?? user}
             />
           ) : (
-            <img
-              src={appLogo}
-              alt={``}
-              className={`message-avatar animate-fade-in`}
-            />
+            showModelAvatar && modelForAvatar ? (
+              <ModelAvatar
+                model={modelForAvatar}
+                className={`message-avatar animate-fade-in`}
+                size={36}
+              />
+            ) : (
+              <img
+                src={appLogo}
+                alt={``}
+                className={`message-avatar animate-fade-in`}
+              />
+            )
           )
         ) : (
           <MessageMenu

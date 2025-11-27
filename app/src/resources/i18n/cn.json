@@ -1488,7 +1488,21 @@
     "previewTitle": "{{name}} 即将开放",
     "previewDesc": "此区域会随着所选模型而变化，敬请期待更多配置能力。",
     "mainTitle": "绘图任务即将上线",
-    "mainDesc": "该页面将用于展示绘图任务的生成进度和结果，当前版本暂未开放。"
+    "mainDesc": "该页面将用于展示绘图任务的生成进度和结果，当前版本暂未开放。",
+    "ratioLabel": "画面比例",
+    "ratio11": "正方形 1:1",
+    "ratio169": "横版 16:9",
+    "ratio916": "竖版 9:16",
+    "quantityLabel": "数量",
+    "quantityTwo": "{{count}} 张图片",
+    "promptLabel": "提示词",
+    "promptPlaceholder": "描述你想生成的画面",
+    "generateButton": "开始生成",
+    "generatingButton": "正在生成...",
+    "generatingHint": "正在生成图片...",
+    "promptRequired": "请先输入提示词。",
+    "errorMessage": "生成失败",
+    "resultLabel": "{{name}} 的回复"
   },
   "account": {
     "title": "账号管理",
