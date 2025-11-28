@@ -14,7 +14,7 @@ export const initialSettings = {
   align: false,
   history: 8,
   sender: !isMobile(), // default [mobile: Ctrl + Enter, pc: Enter]
-  max_tokens: 2000,
+  max_tokens: 15000,
   temperature: 0.6,
   top_p: 1,
   top_k: 5,

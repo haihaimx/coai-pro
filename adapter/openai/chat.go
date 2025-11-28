@@ -81,7 +81,16 @@ func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) 
 	}
 
 	if isNewModel {
-		request.MaxCompletionTokens = props.MaxTokens
+		// for reasoning models (o1, o3, gpt-5), max_completion_tokens includes both
+		// reasoning tokens and output tokens. If the limit is too low, the model may
+		// use all tokens for reasoning and return empty output.
+		// Set a minimum of 16000 to ensure sufficient tokens for output.
+		minReasoningTokens := 16000
+		maxTokens := props.MaxTokens
+		if maxTokens == nil || *maxTokens < minReasoningTokens {
+			maxTokens = &minReasoningTokens
+		}
+		request.MaxCompletionTokens = maxTokens
 	} else {
 		request.MaxToken = props.MaxTokens
 	}
