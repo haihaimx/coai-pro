@@ -36,15 +36,29 @@ func (c *ChatInstance) GetLatestPrompt(props *adaptercommon.ChatProps) string {
 func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) interface{} {
 	if props.Model == globals.GPT3TurboInstruct {
 		// for completions
-		return CompletionRequest{
+		return mergeExtraBody(CompletionRequest{
 			Model:    props.Model,
 			Prompt:   c.GetCompletionPrompt(props.Message),
 			MaxToken: props.MaxTokens,
 			Stream:   stream,
-		}
+		}, props.ExtraBody)
 	}
 
 	messages := formatMessages(props)
+
+	extraBody := props.ExtraBody
+	// GPT 系列模型（包含 "gpt" 的模型 ID）的思考参数
+	shouldApplyReasoning := props.Think != nil && *props.Think && strings.Contains(strings.ToLower(props.Model), "gpt")
+	if shouldApplyReasoning {
+		if extraBody == nil {
+			extraBody = map[string]interface{}{}
+		}
+		if _, exists := extraBody["reasoning"]; !exists {
+			extraBody["reasoning"] = map[string]interface{}{
+				"effort": "high",
+			}
+		}
+	}
 
 	// o1, o3, gpt-5 compatibility
 	isNewModel := len(props.Model) >= 2 && (props.Model[:2] == "o1" || props.Model[:2] == "o3") || strings.HasPrefix(props.Model, "gpt-5")
@@ -70,11 +84,38 @@ func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) 
 	}
 
 	if isNewModel {
-		request.MaxCompletionTokens = props.MaxTokens
+		// for reasoning models (o1, o3, gpt-5), max_completion_tokens includes both
+		// reasoning tokens and output tokens. If the limit is too low, the model may
+		// use all tokens for reasoning and return empty output.
+		// Set a minimum of 16000 to ensure sufficient tokens for output.
+		minReasoningTokens := 16000
+		maxTokens := props.MaxTokens
+		if maxTokens == nil || *maxTokens < minReasoningTokens {
+			maxTokens = &minReasoningTokens
+		}
+		request.MaxCompletionTokens = maxTokens
 	} else {
 		request.MaxToken = props.MaxTokens
 	}
-	return request
+	return mergeExtraBody(request, extraBody)
+}
+
+func mergeExtraBody(body interface{}, extra map[string]interface{}) interface{} {
+	if len(extra) == 0 {
+		return body
+	}
+
+	raw := utils.Marshal(body)
+	data, err := utils.UnmarshalString[map[string]interface{}](raw)
+	if err != nil {
+		return body
+	}
+
+	for key, value := range extra {
+		data[key] = value
+	}
+
+	return data
 }
 
 // CreateChatRequest is the native http request body for openai

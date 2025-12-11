@@ -7,4 +7,5 @@ var MarketInstance *Market
 func InitInstance() {
 	MarketInstance = NewMarket()
 	globals.SetVisionModels(MarketInstance.VisionModelIDs())
+	globals.SetThinkingConfigs(MarketInstance.ThinkingConfigs())
 }

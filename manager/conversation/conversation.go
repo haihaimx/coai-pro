@@ -22,6 +22,7 @@ type Conversation struct {
 	EnableWeb bool              `json:"enable_web"`
 	Shared    bool              `json:"shared"`
 	Context   int               `json:"context"`
+	Think     *bool             `json:"think,omitempty"`
 
 	MaxTokens         *int     `json:"max_tokens,omitempty"`
 	Temperature       *float32 `json:"temperature,omitempty"`
@@ -39,6 +40,7 @@ type FormMessage struct {
 	Model         string `json:"model"`
 	IgnoreContext bool   `json:"ignore_context"`
 	Context       int    `json:"context"`
+	Think         *bool  `json:"think,omitempty"`
 
 	// request params
 	MaxTokens         *int     `json:"max_tokens,omitempty"`
@@ -125,6 +127,23 @@ func (c *Conversation) SetModel(model string) {
 
 func (c *Conversation) SetEnableWeb(enable bool) {
 	c.EnableWeb = enable
+}
+
+func (c *Conversation) SetThink(preference *bool) {
+	if preference == nil {
+		if !globals.IsThinkingModel(c.GetModel()) {
+			c.Think = nil
+		} else if c.Think == nil {
+			c.Think = globals.ResolveThinkingPreference(c.GetModel(), nil)
+		}
+		return
+	}
+
+	c.Think = globals.ResolveThinkingPreference(c.GetModel(), preference)
+}
+
+func (c *Conversation) GetThink() *bool {
+	return c.Think
 }
 
 func (c *Conversation) GetTemperature() *float32 {
@@ -327,6 +346,7 @@ func (c *Conversation) ApplyParam(form *FormMessage) {
 	c.SetPresencePenalty(form.PresencePenalty)
 	c.SetFrequencyPenalty(form.FrequencyPenalty)
 	c.SetRepetitionPenalty(form.RepetitionPenalty)
+	c.SetThink(form.Think)
 }
 
 func (c *Conversation) AddMessageFromByte(data []byte) (string, error) {
@@ -337,6 +357,15 @@ func (c *Conversation) AddMessageFromByte(data []byte) (string, error) {
 		return "", errors.New("message is empty")
 	}
 
+	content, directive := utils.ExtractThinkingDirective(form.Message)
+	if directive != nil {
+		form.Think = directive
+	}
+	form.Message = strings.TrimSpace(content)
+	if len(form.Message) == 0 {
+		return "", errors.New("message is empty")
+	}
+
 	c.AddMessageFromUser(form.Message)
 	c.ApplyParam(&form)
 
@@ -344,6 +373,12 @@ func (c *Conversation) AddMessageFromByte(data []byte) (string, error) {
 }
 
 func (c *Conversation) AddMessageFromForm(form *FormMessage) error {
+	content, directive := utils.ExtractThinkingDirective(form.Message)
+	if directive != nil {
+		form.Think = directive
+	}
+	form.Message = strings.TrimSpace(content)
+
 	if len(form.Message) == 0 {
 		return errors.New("message is empty")
 	}

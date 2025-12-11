@@ -40,8 +40,10 @@ import {
 import React from "react";
 import { cn } from "@/components/ui/lib/utils.ts";
 
+type ModelLike = Model | { id: string; name?: string; avatar?: string };
+
 type ModelAvatarProps = {
-  model: Model | { id: string; name: string; avatar?: string };
+  model: ModelLike;
   className?: string;
   size?: number;
 };
@@ -135,6 +137,20 @@ function getAvatarType(id: string): string | undefined {
   if (id.includes("gpt-4") || id.includes("o1")) return "gpt4";
 }
 
+function resolveBuiltinAvatar(
+  id: string,
+): React.ExoticComponent<IconAvatarProps> | undefined {
+  const normalized = id.toLowerCase();
+  const key = Object.keys(builtinAvatars).find((key) =>
+    normalized.includes(key),
+  );
+  return key ? builtinAvatars[key] : undefined;
+}
+
+export function hasModelAvatar(model: ModelLike): boolean {
+  return isUrl(model.avatar ?? "") || !!resolveBuiltinAvatar(model.id);
+}
+
 function ModelAvatar({ model, className, size }: ModelAvatarProps) {
   const avatarSize = size ?? 42;
   
@@ -166,10 +182,8 @@ function ModelAvatar({ model, className, size }: ModelAvatarProps) {
     );
   }
 
-  // if key is include, return value (reactelement)
   const id = model.id.toLowerCase();
-  const key = Object.keys(builtinAvatars).find((key) => id.includes(key));
-  const Avatar = key ? builtinAvatars[key] : OpenAI.Avatar;
+  const Avatar = resolveBuiltinAvatar(id) ?? OpenAI.Avatar;
 
   return (
     <Avatar

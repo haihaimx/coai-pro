@@ -41,7 +41,9 @@ type RelayForm struct {
 	TopK              *int      `json:"top_k"`
 	Tools             *globals.FunctionTools
 	ToolChoice        *interface{}
-	Official          bool `json:"official"`
+	Official          bool                   `json:"official"`
+	Think             *bool                  `json:"think,omitempty"`
+	ExtraBody         map[string]interface{} `json:"extra_body,omitempty"`
 }
 
 type Choice struct {

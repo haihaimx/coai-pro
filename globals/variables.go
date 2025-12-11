@@ -27,6 +27,13 @@ var AcceptPromptStore bool
 var CloseRegistration bool
 var CloseRelay bool
 
+type ThinkingConfig struct {
+	Enabled          bool
+	AllowUserControl bool
+}
+
+var thinkingConfigs = map[string]ThinkingConfig{}
+
 var SearchEndpoint string
 var SearchCrop bool
 var SearchCropLength int
@@ -73,6 +80,57 @@ func OriginIsAllowed(uri string) bool {
 
 func OriginIsOpen(c *gin.Context) bool {
 	return strings.HasPrefix(c.Request.URL.Path, "/v1") || strings.HasPrefix(c.Request.URL.Path, "/dashboard") || strings.HasPrefix(c.Request.URL.Path, "/mj")
+}
+
+func cloneThinkingConfigs(config map[string]ThinkingConfig) map[string]ThinkingConfig {
+	result := make(map[string]ThinkingConfig)
+	for model, item := range config {
+		result[model] = item
+	}
+	return result
+}
+
+func SetThinkingConfigs(config map[string]ThinkingConfig) {
+	if len(config) == 0 {
+		thinkingConfigs = map[string]ThinkingConfig{}
+		return
+	}
+
+	thinkingConfigs = cloneThinkingConfigs(config)
+}
+
+func GetThinkingConfig(model string) ThinkingConfig {
+	if config, ok := thinkingConfigs[model]; ok {
+		return config
+	}
+
+	return ThinkingConfig{}
+}
+
+func IsThinkingModel(model string) bool {
+	return GetThinkingConfig(model).Enabled
+}
+
+func AllowUserThink(model string) bool {
+	return GetThinkingConfig(model).AllowUserControl
+}
+
+func boolPtr(value bool) *bool {
+	v := value
+	return &v
+}
+
+func ResolveThinkingPreference(model string, preference *bool) *bool {
+	config := GetThinkingConfig(model)
+	if !config.Enabled {
+		return nil
+	}
+
+	if !config.AllowUserControl || preference == nil {
+		return boolPtr(true)
+	}
+
+	return preference
 }
 
 const (
@@ -175,10 +233,9 @@ var GoogleImagenModels = []string{
 var defaultVisionModels = []string{
 	GPT4VisionPreview, GPT41106VisionPreview, GPT4Turbo, GPT4Turbo20240409, GPT4O, GPT4O20240513, // openai
 	GeminiProVision, Gemini15ProLatest, Gemini15FlashLatest, // gemini
-	Claude3,             // anthropic
-	ZhiPuChatGLM4Vision, // chatglm
+	Claude3,                             // anthropic
+	ZhiPuChatGLM4Vision,                 // chatglm
 	Sora2Landscape15s, Sora2Portrait15s, // sora2
-	
 
 }
 

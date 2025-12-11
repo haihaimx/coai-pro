@@ -43,9 +43,11 @@ func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) 
 		}
 	}
 
-	return ChatRequest{
+	// o1, o3, gpt-5 compatibility
+	isNewModel := len(props.Model) >= 2 && (props.Model[:2] == "o1" || props.Model[:2] == "o3") || strings.HasPrefix(props.Model, "gpt-5")
+
+	request := ChatRequest{
 		Messages:         formatMessages(props),
-		MaxToken:         props.MaxTokens,
 		Stream:           stream,
 		PresencePenalty:  props.PresencePenalty,
 		FrequencyPenalty: props.FrequencyPenalty,
@@ -54,6 +56,23 @@ func (c *ChatInstance) GetChatBody(props *adaptercommon.ChatProps, stream bool) 
 		Tools:            props.Tools,
 		ToolChoice:       props.ToolChoice,
 	}
+
+	if isNewModel {
+		// for reasoning models (o1, o3, gpt-5), max_completion_tokens includes both
+		// reasoning tokens and output tokens. If the limit is too low, the model may
+		// use all tokens for reasoning and return empty output.
+		// Set a minimum of 16000 to ensure sufficient tokens for output.
+		minReasoningTokens := 16000
+		maxTokens := props.MaxTokens
+		if maxTokens == nil || *maxTokens < minReasoningTokens {
+			maxTokens = &minReasoningTokens
+		}
+		request.MaxCompletionTokens = maxTokens
+	} else {
+		request.MaxToken = props.MaxTokens
+	}
+
+	return request
 }
 
 // CreateChatRequest is the native http request body for openai

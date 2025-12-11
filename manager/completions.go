@@ -25,6 +25,8 @@ func NativeChatHandler(c *gin.Context, user *auth.User, model string, message []
 	}()
 
 	segment := web.ToSearched(enableWeb, message)
+	thinkState := globals.ResolveThinkingPreference(model, nil)
+	segment = utils.ApplyThinkingDirective(segment, thinkState)
 
 	db := utils.GetDBFromContext(c)
 	cache := utils.GetCacheFromContext(c)
@@ -41,6 +43,7 @@ func NativeChatHandler(c *gin.Context, user *auth.User, model string, message []
 		adaptercommon.CreateChatProps(&adaptercommon.ChatProps{
 			Model:   model,
 			Message: segment,
+			Think:   thinkState,
 		}, buffer),
 		func(resp *globals.Chunk) error {
 			buffer.WriteChunk(resp)

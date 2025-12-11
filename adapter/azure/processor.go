@@ -75,18 +75,25 @@ func processChatErrorResponse(data string) *ChatStreamErrorResponse {
 	return utils.UnmarshalForm[ChatStreamErrorResponse](data)
 }
 
-func getChoices(form *ChatStreamResponse) *globals.Chunk {
+func getChoices(form *ChatStreamResponse) (*globals.Chunk, error) {
 	if len(form.Choices) == 0 {
-		return &globals.Chunk{Content: ""}
+		return &globals.Chunk{Content: ""}, nil
 	}
 
-	choice := form.Choices[0].Delta
+	choice := form.Choices[0]
+
+	// detect reasoning model exhausted tokens: finish_reason is "length" but content is empty
+	// this happens when the model uses all max_completion_tokens for reasoning
+	if choice.FinishReason == "length" && choice.Delta.Content == "" &&
+		choice.Delta.ToolCalls == nil && choice.Delta.FunctionCall == nil {
+		return nil, errors.New("reasoning model exhausted token limit during thinking phase, please increase max_tokens setting")
+	}
 
 	return &globals.Chunk{
-		Content:      choice.Content,
-		ToolCall:     choice.ToolCalls,
-		FunctionCall: choice.FunctionCall,
-	}
+		Content:      choice.Delta.Content,
+		ToolCall:     choice.Delta.ToolCalls,
+		FunctionCall: choice.Delta.FunctionCall,
+	}, nil
 }
 
 func getCompletionChoices(form *CompletionResponse) string {
@@ -126,7 +133,11 @@ func (c *ChatInstance) ProcessLine(data string, isCompletionType bool) (*globals
 	}
 
 	if form := processChatResponse(data); form != nil {
-		return getChoices(form), nil
+		chunk, err := getChoices(form)
+		if err != nil {
+			return nil, err
+		}
+		return chunk, nil
 	}
 
 	if form := processChatErrorResponse(data); form != nil {

@@ -31,8 +31,16 @@ import {
 import { cn } from "@/components/ui/lib/utils.ts";
 import EditorProvider from "@/components/EditorProvider.tsx";
 import Avatar from "@/components/Avatar.tsx";
+import ModelAvatar, {
+  hasModelAvatar,
+} from "@/components/ModelAvatar.tsx";
 import { useSelector } from "react-redux";
 import { selectUsername } from "@/store/auth.ts";
+import {
+  selectModel,
+  selectSupportModels,
+  useThinkingSettings,
+} from "@/store/chat.ts";
 import { appLogo } from "@/conf/env.ts";
 import { motion } from "framer-motion";
 import { ThinkContent } from "@/components/ThinkContent";
@@ -255,31 +263,57 @@ function MessageContent({
   const isAssistant = message.role === "assistant";
   const isOutput = message.end === false;
   const user = useSelector(selectUsername);
+  const { active: showThinking } = useThinkingSettings();
+  const activeModelId = useSelector(selectModel);
+  const supportModels = useSelector(selectSupportModels);
+  const activeModel = React.useMemo(
+    () => supportModels.find((item) => item.id === activeModelId),
+    [supportModels, activeModelId],
+  );
+  const modelForAvatar = React.useMemo(() => {
+    if (activeModel) return activeModel;
+    if (!activeModelId) return undefined;
+    return {
+      id: activeModelId,
+      name: activeModelId,
+      avatar: "",
+    };
+  }, [activeModel, activeModelId]);
+  const showModelAvatar = modelForAvatar ? hasModelAvatar(modelForAvatar) : false;
 
   const [open, setOpen] = useState(false);
   const [editedMessage, setEditedMessage] = useState<string | undefined>("");
 
   // parse think content
   const parseThinkContent = (content: string) => {
-    // check if there is a start tag
+    // 检查是否以 <think> 开头（思考内容必须在消息开头）
+    const trimmedContent = content.trimStart();
+    if (!trimmedContent.startsWith('<think>')) {
+      return null;
+    }
 
-    const startMatch = content.match(/<think>\n?(.*?)(?:<\/think>|$)/s);
-    if (startMatch) {
-      const thinkContent = startMatch[1];
-      // if there is an end tag, remove the whole matching part;
-      // if not, keep the remaining content
-      const hasEndTag = content.includes('</think>');
-      const restContent = hasEndTag ? 
-        content.replace(startMatch[0], "").trim() :
-        content.substring(content.indexOf('<think>') + 7).trim();
-      
+    const startIndex = content.indexOf('<think>');
+    const endIndex = content.indexOf('</think>');
+    const hasEndTag = endIndex !== -1;
+
+    if (hasEndTag) {
+      // 有结束标签：提取思考内容和正文内容
+      const thinkContent = content.substring(startIndex + 7, endIndex).trim();
+      const restContent = content.substring(endIndex + 8).trim();
       return {
         thinkContent,
-        restContent: hasEndTag ? restContent : '',
-        isComplete: hasEndTag
+        restContent,
+        isComplete: true
+      };
+    } else {
+      // 没有结束标签（流式传输中）：所有内容都是思考内容
+      const thinkContent = content.substring(startIndex + 7).trim();
+      return {
+        thinkContent,
+        restContent: '',
+        isComplete: false
       };
     }
-    return null;
   };
 
   const parsedContent = message.content.length ? parseThinkContent(message.content) : null;
@@ -302,11 +336,19 @@ function MessageContent({
               username={username ?? user}
             />
           ) : (
-            <img
-              src={appLogo}
-              alt={``}
-              className={`message-avatar animate-fade-in`}
-            />
+            showModelAvatar && modelForAvatar ? (
+              <ModelAvatar
+                model={modelForAvatar}
+                className={`message-avatar animate-fade-in`}
+                size={36}
+              />
+            ) : (
+              <img
+                src={appLogo}
+                alt={``}
+                className={`message-avatar animate-fade-in`}
+              />
+            )
           )
         ) : (
           <MessageMenu
@@ -334,14 +376,16 @@ function MessageContent({
           <>
             {parsedContent ? (
               <>
-                <ThinkContent 
-                  content={parsedContent.thinkContent} 
-                  isComplete={parsedContent.isComplete}
-                />
+                {showThinking && (
+                  <ThinkContent
+                    content={parsedContent.thinkContent}
+                    isComplete={parsedContent.isComplete}
+                  />
+                )}
                 {parsedContent.restContent && (
                   <Markdown
                     loading={message.end === false}
-                    children={message.content}
+                    children={parsedContent.restContent}
                     acceptHtml={false}
                   />
                 )}

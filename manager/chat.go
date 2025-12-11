@@ -111,7 +111,7 @@ func createStopSignal(conn *Connection) chan bool {
 
 func createChatTask(
 	conn *Connection, user *auth.User, buffer *utils.Buffer, db *sql.DB, cache *redis.Client,
-	model string, instance *conversation.Conversation, segment []globals.Message, plan bool,
+	model string, instance *conversation.Conversation, segment []globals.Message, think *bool, plan bool,
 ) (hit bool, err error) {
 	chunkChan := make(chan partialChunk, 24) // the channel to send the chunk data
 	interruptSignal := make(chan error, 1)   // the signal to interrupt the chat task routine
@@ -146,6 +146,7 @@ func createChatTask(
 				PresencePenalty:   instance.GetPresencePenalty(),
 				FrequencyPenalty:  instance.GetFrequencyPenalty(),
 				RepetitionPenalty: instance.GetRepetitionPenalty(),
+				Think:             think,
 			}, buffer),
 
 			// the function to handle the chunk data
@@ -233,6 +234,8 @@ func ChatHandler(conn *Connection, user *auth.User, instance *conversation.Conve
 
 	model := instance.GetModel()
 	segment := adapter.ClearMessages(model, web.ToChatSearched(instance, restart))
+	thinkState := instance.GetThink()
+	segment = utils.ApplyThinkingDirective(segment, thinkState)
 
 	check, plan, usageDetail := auth.CanEnableModelWithSubscription(db, cache, user, model, segment)
 	conn.Send(globals.ChatSegmentResponse{
@@ -250,7 +253,7 @@ func ChatHandler(conn *Connection, user *auth.User, instance *conversation.Conve
 	}
 
 	buffer := utils.NewBuffer(model, segment, channel.ChargeInstance.GetCharge(model))
-	hit, err := createChatTask(conn, user, buffer, db, cache, model, instance, segment, plan)
+	hit, err := createChatTask(conn, user, buffer, db, cache, model, instance, segment, thinkState, plan)
 
 	admin.AnalyseRequest(model, buffer, err)
 	if adapter.IsAvailableError(err) {

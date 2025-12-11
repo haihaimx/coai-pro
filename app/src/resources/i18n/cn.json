@@ -252,7 +252,7 @@
     "deep-thinking-enable-toast": "已开启深度思考",
     "deep-thinking-enable-tip": "深度思考可能会导致输出较慢",
     "deep-thinking-disable-toast": "已关闭深度思考",
-    "model-not-support-thinking-desc": "当前模型不支持开启深度思考",
+    "model-not-support-thinking-desc": "当前模型不支持手动开关思维链",
     "plugin": "插件",
     "voice": "语音识别",
     "placeholder": "输入聊天内容...",
@@ -900,6 +900,8 @@
       "vision-model-tip": "模型是否为识图模型（识图模型支持图片输入，如 GPT-4 Turbo）",
       "thinking-model": "思考模型",
       "thinking-model-tip": "模型是否支持深度思考（深度思考模型会在输出内容时一并输出思考链，如 Claude 3.7 Sonnet）",
+      "allow-thinking-control": "允许用户控制推理",
+      "allow-thinking-control-tip": "若开启，用户可在对话中选择是否输出思维链；若模型本身不支持关闭思维链，请保持关闭以避免误导",
       "ocr-model": "OCR 辅助",
       "ocr-model-tip": "如果模型本身不支持图片输入，可以开启 OCR 文字识别以在一定程度上使模型具有视觉能力作为补充 (提示：文件解析服务必须支持 OCR 服务)",
       "reverse-model": "逆向模型",
@@ -1240,7 +1242,7 @@
       "epayAggregation": "聚合支付模式",
       "epayAggregationTip": "开启后点击将不会选择支付方式直接跳转，请确保您的易支付支持聚合支付模式",
       "stripeTitle": "Stripe",
-      "stripeTip":"Stripe 是一种广泛使用的国际在线支付系统，支持多种支付方式，包括信用卡、借记卡、Apple Pay、Google Pay等。它为用户提供了安全、便捷的支付体验，特别适合需要处理国际支付的业务。",
+      "stripeTip": "Stripe 是一种广泛使用的国际在线支付系统，支持多种支付方式，包括信用卡、借记卡、Apple Pay、Google Pay等。它为用户提供了安全、便捷的支付体验，特别适合需要处理国际支付的业务。",
       "stripeEnabled": "启用 Stripe",
       "stripeSecretKey": "Stripe Secret Key",
       "stripeSecretKeyPlaceholder": "请输入 Stripe Secret Key",
@@ -1462,6 +1464,8 @@
     "chat-full": "开始对话",
     "model": "模型",
     "model-full": "探索模型",
+    "drawing": "绘图",
+    "drawing-full": "绘图工作台",
     "preset": "预设",
     "preset-full": "预设市场",
     "wallet": "钱包",
@@ -1474,6 +1478,31 @@
     "account-full": "账户管理",
     "admin": "后台",
     "admin-full": "后台管理"
+  },
+  "drawing": {
+    "modelSelectorTitle": "绘图模型",
+    "modelPlaceholder": "请选择绘图模型",
+    "historyButton": "历史记录",
+    "modelEmptyTitle": "暂无绘图模型",
+    "modelEmptyDesc": "请在后台为模型添加“绘图”标签后重试。",
+    "previewTitle": "{{name}} 即将开放",
+    "previewDesc": "此区域会随着所选模型而变化，敬请期待更多配置能力。",
+    "mainTitle": "绘图任务即将上线",
+    "mainDesc": "该页面将用于展示绘图任务的生成进度和结果，当前版本暂未开放。",
+    "ratioLabel": "画面比例",
+    "ratio11": "正方形 1:1",
+    "ratio169": "横版 16:9",
+    "ratio916": "竖版 9:16",
+    "quantityLabel": "数量",
+    "quantityTwo": "{{count}} 张图片",
+    "promptLabel": "提示词",
+    "promptPlaceholder": "描述你想生成的画面",
+    "generateButton": "开始生成",
+    "generatingButton": "正在生成...",
+    "generatingHint": "正在生成图片...",
+    "promptRequired": "请先输入提示词。",
+    "errorMessage": "生成失败",
+    "resultLabel": "{{name}} 的回复"
   },
   "account": {
     "title": "账号管理",
@@ -1610,7 +1639,9 @@
   "aff": {
     "title": "推广分成",
     "bind-desc": "绑定推广码，开始获得被邀请用户购买后的返佣收益。",
-    "placeholder": { "code": "请输入推广码" },
+    "placeholder": {
+      "code": "请输入推广码"
+    },
     "generate-code-first": "请先生成推广码",
     "get": "获取推广码",
     "get-placeholder": "点击获取推广码",
@@ -1639,4 +1670,3 @@
     }
   }
 }
-

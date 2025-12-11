@@ -84,6 +84,7 @@ export type Model = {
   ocr_model?: boolean;
   reverse_model?: boolean;
   thinking_model?: boolean;
+  allow_user_think?: boolean;
   avatar: string;
   tag?: string[];
 

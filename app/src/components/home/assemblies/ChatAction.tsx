@@ -1,10 +1,19 @@
 import {
   selectWeb,
+  toggleThink,
   toggleWeb,
   useConversationActions,
   useMessages,
+  useThinkingSettings,
 } from "@/store/chat.ts";
-import { Globe, Info, MessageSquarePlus, Wifi, WifiOff } from "lucide-react";
+import {
+  Brain,
+  Globe,
+  Info,
+  MessageSquarePlus,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import React from "react";
@@ -148,6 +157,66 @@ export function WebAction() {
             <div className="flex items-center">
               <Icon icon={<Info />} className="h-3 w-3 mr-1 shrink-0" />
               {t("chat.web-enable-tip")}
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function ThinkingAction() {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const { supportsThinking, allowUserControl, active, preference } =
+    useThinkingSettings();
+
+  if (!supportsThinking) return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <div>
+          <ChatAction
+            active={active}
+            text={t("chat.deep-thinking")}
+          >
+            <Brain className={cn("h-4 w-4", active && "enable")} />
+          </ChatAction>
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-64 p-3"
+        side="top"
+        align="start"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="deep-thinking-toggle" className="text-sm">
+              {t("chat.deep-thinking")}
+            </Label>
+            <Switch
+              id="deep-thinking-toggle"
+              checked={active}
+              disabled={!allowUserControl}
+              onCheckedChange={(checked) => {
+                if (!allowUserControl || checked === active) return;
+                dispatch(toggleThink());
+                toast(t("chat.deep-thinking"), {
+                  description: preference
+                    ? t("chat.deep-thinking-disable-toast")
+                    : t("chat.deep-thinking-enable-toast"),
+                });
+              }}
+            />
+          </div>
+
+          <div className="rounded-md bg-muted p-2 text-xs">
+            <div className="flex items-center">
+              <Icon icon={<Info />} className="h-3 w-3 mr-1 shrink-0" />
+              {allowUserControl
+                ? t("chat.deep-thinking-enable-tip")
+                : t("chat.model-not-support-thinking-desc")}
             </div>
           </div>
         </div>
